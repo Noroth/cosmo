@@ -539,6 +539,26 @@
         }
       }
     },
+    "file_log_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "log_file_name": {
+          "type": "string",
+          "default": "",
+          "description": "The full path to the log file. Defaults to the temp directory."
+        },
+        "max_size": {
+          "type": "integer",
+          "default": 10485760,
+          "description": "The maximum size of a log file before rotation. Default to 10 megabyte."
+        }
+      }
+    },
     "listen_addr": {
       "type": "string",
       "description": "The address on which the router listens for incoming requests. The address is specified as a string with the format 'host:port'.",

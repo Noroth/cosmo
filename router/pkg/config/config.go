@@ -408,6 +408,12 @@ const (
 	SubgraphErrorPropagationModePassthrough SubgraphErrorPropagationMode = "pass-through"
 )
 
+type FileLogConfig struct {
+	Enabled     bool   `yaml:"enabled" default:"false" envconfig:"FILE_LOG_ENABLED"`
+	LogFileName string `yaml:"log_file_name" default:"" envconfig:"FILE_LOG_FILE_NAME"`
+	MaxSize     int64  `yaml:"max_size" default:"10485760" envconfig:"FILE_LOG_MAX_SIZE"`
+}
+
 type SubgraphErrorPropagationConfiguration struct {
 	Enabled              bool                         `yaml:"enabled" default:"false" envconfig:"SUBGRAPH_ERROR_PROPAGATION_ENABLED"`
 	PropagateStatusCodes bool                         `yaml:"propagate_status_codes" default:"false" envconfig:"SUBGRAPH_ERROR_PROPAGATION_STATUS_CODES"`
@@ -433,6 +439,8 @@ type Config struct {
 	Headers        HeaderRules            `yaml:"headers,omitempty"`
 	TrafficShaping TrafficShapingRules    `yaml:"traffic_shaping,omitempty"`
 	FileUpload     FileUpload             `yaml:"file_upload,omitempty"`
+
+	FileLogConfig FileLogConfig `yaml:"file_log_config,omitempty"`
 
 	ListenAddr                    string                      `yaml:"listen_addr" default:"localhost:3002" envconfig:"LISTEN_ADDR"`
 	ControlplaneURL               string                      `yaml:"controlplane_url" default:"https://cosmo-cp.wundergraph.com" envconfig:"CONTROLPLANE_URL"`
