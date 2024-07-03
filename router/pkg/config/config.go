@@ -411,7 +411,7 @@ const (
 type FileLogConfig struct {
 	Enabled     bool   `yaml:"enabled" default:"false" envconfig:"FILE_LOG_ENABLED"`
 	LogFileName string `yaml:"log_file_name" default:"" envconfig:"FILE_LOG_FILE_NAME"`
-	MaxSize     int64  `yaml:"max_size" default:"10485760" envconfig:"FILE_LOG_MAX_SIZE"`
+	MaxSizeMB   int    `yaml:"max_size_mb" default:"10" envconfig:"FILE_LOG_MAX_SIZE"`
 }
 
 type SubgraphErrorPropagationConfiguration struct {

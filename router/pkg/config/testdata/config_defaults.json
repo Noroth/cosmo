@@ -115,7 +115,7 @@
   "FileLogConfig": {
     "Enabled": false,
     "LogFileName": "",
-    "MaxSize": 10485760
+    "MaxSizeMB": 10
   },
   "ListenAddr": "localhost:3002",
   "ControlplaneURL": "https://cosmo-cp.wundergraph.com",
