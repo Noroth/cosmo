@@ -112,6 +112,11 @@
     "MaxFileSizeBytes": 50000000,
     "MaxFiles": 10
   },
+  "FileLogConfig": {
+    "Enabled": false,
+    "LogFileName": "",
+    "MaxSizeMB": 10
+  },
   "ListenAddr": "localhost:3002",
   "ControlplaneURL": "https://cosmo-cp.wundergraph.com",
   "PlaygroundEnabled": true,

@@ -9,6 +9,7 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const (
@@ -17,8 +18,28 @@ const (
 
 type RequestIDKey struct{}
 
-func New(prettyLogging bool, debug bool, level zapcore.Level) *zap.Logger {
-	return newZapLogger(zapcore.AddSync(os.Stdout), prettyLogging, debug, level)
+type Params struct {
+	PrettyLogging     bool
+	Debug             bool
+	Level             zapcore.Level
+	EnableFileLogging bool
+	LogFileName       string
+	MaxSize           int
+}
+
+func New(params Params) *zap.Logger {
+	var cores []zapcore.Core
+
+	cores = append(cores, newZapCore(zapcore.AddSync(os.Stdout), params.PrettyLogging, params.Level))
+	if params.EnableFileLogging {
+		fileLoggerSync := zapcore.AddSync(&lumberjack.Logger{
+			Filename: params.LogFileName,
+			MaxSize:  params.MaxSize,
+		})
+		cores = append(cores, newZapCore(fileLoggerSync, false, params.Level))
+	}
+
+	return newZapLogger(zapcore.NewTee(cores...), params.PrettyLogging, params.Debug)
 }
 
 func zapBaseEncoderConfig() zapcore.EncoderConfig {
@@ -60,9 +81,8 @@ func attachBaseFields(logger *zap.Logger) *zap.Logger {
 	return logger
 }
 
-func newZapLogger(syncer zapcore.WriteSyncer, prettyLogging bool, debug bool, level zapcore.Level) *zap.Logger {
+func newZapCore(syncer zapcore.WriteSyncer, prettyLogging bool, level zapcore.Level) zapcore.Core {
 	var encoder zapcore.Encoder
-	var zapOpts []zap.Option
 
 	if prettyLogging {
 		encoder = zapConsoleEncoder()
@@ -70,25 +90,25 @@ func newZapLogger(syncer zapcore.WriteSyncer, prettyLogging bool, debug bool, le
 		encoder = ZapJsonEncoder()
 	}
 
+	return zapcore.NewCore(encoder, syncer, level)
+}
+
+func newZapLogger(core zapcore.Core, prettyLogging bool, debug bool) *zap.Logger {
+	var zapOpts []zap.Option
+
 	if debug {
 		zapOpts = append(zapOpts, zap.AddCaller())
 	}
 
 	zapOpts = append(zapOpts, zap.AddStacktrace(zap.ErrorLevel))
 
-	zapLogger := zap.New(zapcore.NewCore(
-		encoder,
-		syncer,
-		level,
-	), zapOpts...)
+	logger := zap.New(core, zapOpts...)
 
-	if prettyLogging {
-		return zapLogger
+	if !prettyLogging {
+		logger = attachBaseFields(logger)
 	}
 
-	zapLogger = attachBaseFields(zapLogger)
-
-	return zapLogger
+	return logger
 }
 
 func ZapLogLevelFromString(logLevel string) (zapcore.Level, error) {

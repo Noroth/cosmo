@@ -49,6 +49,7 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/wundergraph/cosmo/demo/pkg/subgraphs"
@@ -112,6 +113,7 @@ type Config struct {
 	OtelResourceAttributes             []config.OtelResourceAttribute
 	MetricReader                       metric.Reader
 	PrometheusRegistry                 *prometheus.Registry
+	LogObservation                     LogObservationConfig
 }
 
 type SubgraphsConfig struct {
@@ -132,6 +134,11 @@ type SubgraphConfig struct {
 	Middleware   func(http.Handler) http.Handler
 	Delay        time.Duration
 	CloseOnStart bool
+}
+
+type LogObservationConfig struct {
+	Enabled  bool
+	LogLevel zapcore.Level
 }
 
 var (
@@ -379,7 +386,30 @@ func createTestEnv(t testing.TB, cfg *Config) (*Environment, error) {
 	client.RetryMax = 10
 	client.RetryWaitMin = 100 * time.Millisecond
 
-	rr, err := configureRouter(listenerAddr, cfg, &routerConfig, cdn, natsData.Server)
+	var (
+		zapLogger   *zap.Logger
+		logObserver *observer.ObservedLogs
+	)
+
+	if oc := cfg.LogObservation; oc.Enabled {
+		var core zapcore.Core
+		core, logObserver = observer.New(oc.LogLevel)
+		zapLogger = zap.New(core)
+	} else {
+		ec := zap.NewProductionEncoderConfig()
+		ec.EncodeDuration = zapcore.SecondsDurationEncoder
+		ec.TimeKey = "time"
+
+		syncer := zapcore.AddSync(os.Stderr)
+
+		zapLogger = zap.New(zapcore.NewCore(
+			zapcore.NewConsoleEncoder(ec),
+			syncer,
+			zapcore.ErrorLevel,
+		))
+	}
+
+	rr, err := configureRouter(listenerAddr, cfg, &routerConfig, cdn, natsData.Server, zapLogger)
 	if err != nil {
 		return nil, err
 	}
@@ -478,6 +508,7 @@ func createTestEnv(t testing.TB, cfg *Config) (*Environment, error) {
 		SubgraphRequestCount:  counters,
 		KafkaAdminClient:      kafkaAdminClient,
 		KafkaClient:           kafkaClient,
+		logObserver:           logObserver,
 		Servers: []*httptest.Server{
 			employeesServer,
 			familyServer,
@@ -495,7 +526,7 @@ func createTestEnv(t testing.TB, cfg *Config) (*Environment, error) {
 	return e, nil
 }
 
-func configureRouter(listenerAddr string, testConfig *Config, routerConfig *nodev1.RouterConfig, cdn *httptest.Server, natsServer *natsserver.Server) (*core.Router, error) {
+func configureRouter(listenerAddr string, testConfig *Config, routerConfig *nodev1.RouterConfig, cdn *httptest.Server, natsServer *natsserver.Server, zapLogger *zap.Logger) (*core.Router, error) {
 	cfg := config.Config{
 		Graph: config.Graph{},
 		CDN: config.CDNConfiguration{
@@ -515,18 +546,6 @@ func configureRouter(listenerAddr string, testConfig *Config, routerConfig *node
 	if testConfig.ModifyCDNConfig != nil {
 		testConfig.ModifyCDNConfig(&cfg.CDN)
 	}
-
-	ec := zap.NewProductionEncoderConfig()
-	ec.EncodeDuration = zapcore.SecondsDurationEncoder
-	ec.TimeKey = "time"
-
-	syncer := zapcore.AddSync(os.Stderr)
-
-	zapLogger := zap.New(zapcore.NewCore(
-		zapcore.NewConsoleEncoder(ec),
-		syncer,
-		zapcore.ErrorLevel,
-	))
 
 	t := jwt.New(jwt.SigningMethodHS256)
 	t.Claims = testTokenClaims()
@@ -771,6 +790,7 @@ type Environment struct {
 	KafkaClient           *kgo.Client
 
 	extraURLQueryValues url.Values
+	logObserver         *observer.ObservedLogs
 }
 
 func (e *Environment) SetExtraURLQueryValues(values url.Values) {
@@ -1288,6 +1308,14 @@ func (e *Environment) WaitForTriggerCount(desiredCount uint64, timeout time.Dura
 		}
 	}
 
+}
+
+func (e *Environment) Observer() *observer.ObservedLogs {
+	if e.logObserver == nil {
+		e.t.Fatal("Log observation is not enabled. Enable it in the environment config")
+	}
+
+	return e.logObserver
 }
 
 func subgraphOptions(ctx context.Context, t testing.TB, natsServer *natsserver.Server) *subgraphs.SubgraphOptions {

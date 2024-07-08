@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,7 +45,6 @@ func TestPoller(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			time.Sleep(time.Second)
 			for i := 0; i < msgPerConn; i++ {
 				n, err := conn.Write([]byte("hello world"))
 				if err != nil {
@@ -54,15 +54,17 @@ func TestPoller(t *testing.T) {
 					t.Errorf("expect to write %d bytes but got %d bytes", len("hello world"), n)
 				}
 			}
-			conn.Close()
 		}()
 	}
 
 	// read those num * msgPerConn messages, and each message (hello world) contains 11 bytes.
 	done := make(chan struct{})
 	errs := make(chan error)
-	var total int
-	var count int
+	var total atomic.Int32
+	var count atomic.Int32
+
+	total.Store(0)
+	count.Store(0)
 
 	expected := num * msgPerConn * len("hello world")
 	go func(errs chan error) {
@@ -76,7 +78,7 @@ func TestPoller(t *testing.T) {
 			if len(conns) == 0 {
 				continue
 			}
-			count++
+			count.Add(1)
 			buf := make([]byte, 1024)
 			for _, conn := range conns {
 				n, err := conn.Read(buf)
@@ -88,27 +90,27 @@ func TestPoller(t *testing.T) {
 						t.Error(err)
 					}
 				}
-				total += n
+				total.Add(int32(n))
 			}
 
-			if total == expected {
+			if total.Load() == int32(expected) {
 				break
 			}
 		}
 
-		t.Logf("read all %d bytes, count: %d", total, count)
+		t.Logf("read all %d bytes, count: %d", total.Load(), count.Load())
 		close(done)
 	}(errs)
 
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 	case err := <-errs:
 		t.Fatal(err)
 	}
 
-	if total != expected {
-		t.Fatalf("epoller does not work. expect %d bytes but got %d bytes", expected, total)
+	if total.Load() != int32(expected) {
+		t.Fatalf("epoller does not work. expect %d bytes but got %d bytes", expected, total.Load())
 	}
 }
 

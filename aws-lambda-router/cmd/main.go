@@ -34,7 +34,12 @@ var (
 func main() {
 	ctx := context.Background()
 
-	logger := logging.New(false, false, zapcore.InfoLevel)
+	logger := logging.New(logging.Params{
+		PrettyLogging: false,
+		Debug:         false,
+		Level:         zapcore.InfoLevel,
+	})
+
 	logger = logger.With(
 		zap.String("service_version", internal.Version),
 	)
